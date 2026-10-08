@@ -52,3 +52,12 @@ export interface DocumentCreate {
   kind: DocumentKind;
   title: string;
 }
+
+export interface AgentQuery {
+  query: string;
+}
+
+export interface AgentStreamEvent {
+  type: "delta" | "done" | "error";
+  content: string;
+}

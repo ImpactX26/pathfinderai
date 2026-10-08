@@ -1,0 +1,61 @@
+{
+  "passed": 6,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [
+    "Pre-existing test tests/test_tscheck_documents.py::test_document_addition_returns_reviewed_applicant_evidence uses a static fixture title (tscheck-journey-evidence.pdf) instead of a unique suffix, so it fails on any rerun once residue exists (observed 2/3 matches). This predates this iteration's acceptance_matrix (no document criterion in this briefing) and is not a regression from the live-agent feature; flagged for cleanup but not blocking this iteration.",
+    "Backend logs show a transient litellm.AuthenticationError from an older/rotated API key on some earlier request; current live calls (via curl and the new pytest file) succeed consistently against the configured AICredits/gpt-5.4 provider, so this is not currently reproducible."
+  ],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Applicant can ask the live agent a free-form query",
+      "name": "agent-ask-grounded-answer",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Public preview: submitted a free-form question in Ask your agent card; agent-chat-answer rendered non-empty streamed content, no agent-chat-error shown."
+    },
+    {
+      "criterion": "Agent answer is grounded in the current applicant profile",
+      "name": "test_agent_query_stream_grounded_answer",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/agent/query/stream -> 200 SSE; collected delta+done events, answer referenced applicant's qualification_label/pathway/next-step language from GET /api/applicant, no error event."
+    },
+    {
+      "criterion": "Live provider identity is clear",
+      "name": "agent-ask-grounded-answer",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "agent-chat-provider badge visibly reads 'AICredits · GPT-5.4' on the Ask your agent card."
+    },
+    {
+      "criterion": "Agent endpoint validates bad queries",
+      "name": "test_agent_query_stream_rejects_empty_query",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/agent/query/stream with query='' -> 422 {'detail':[{'type':'string_too_short','loc':['body','query'],...}]}."
+    },
+    {
+      "criterion": "Existing applicant workspace remains usable",
+      "name": "educaro-dashboard-workspace",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: dashboard shell, pathway/profile cards, documents, qualification, recommendation still render after the agent card addition."
+    },
+    {
+      "criterion": "Existing applicant workspace remains usable",
+      "name": "educaro-qualification-next-step",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: qualification card progress, requirements, and recommendation action remain interactive."
+    },
+    {
+      "criterion": "Existing applicant workspace remains usable",
+      "name": "educaro-agent-trace-visible",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: agent trace steps (Profile assembled, Evidence mapped, Requirements checked, Next step selected) still visible with status markers."
+    }
+  ]
+}

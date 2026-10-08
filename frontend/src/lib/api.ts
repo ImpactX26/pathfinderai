@@ -36,6 +36,43 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   return (await res.json()) as T;
 }
 
+export async function apiStream<T>(
+  path: string,
+  body: JsonBody,
+  onEvent: (event: T) => void,
+): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    throw new ApiError(res.status, errBody);
+  }
+  if (!res.body) throw new Error("Agent stream is unavailable");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const emit = (message: string) => {
+    const dataLine = message.split("\n").find((line) => line.startsWith("data: "));
+    if (dataLine) onEvent(JSON.parse(dataLine.slice(6)) as T);
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const messages = buffer.split("\n\n");
+    buffer = messages.pop() ?? "";
+    messages.filter(Boolean).forEach(emit);
+    if (done) break;
+  }
+  if (buffer.trim()) emit(buffer);
+}
+
 // The response type is yours to declare: nothing infers across the Python boundary, so a
 // TS interface here mirrors the endpoint's Pydantic model by hand — keep the two in sync.
 export const apiGet = <T>(path: string) => request<T>("GET", path);

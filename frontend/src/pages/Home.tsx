@@ -16,7 +16,9 @@ import {
   Leaf,
   Mail,
   MapPin,
+  MessageCircle,
   Plus,
+  Send,
   ShieldCheck,
   Sparkles,
   UploadCloud,
@@ -27,8 +29,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiStream } from "@/lib/api";
 import type {
+  AgentQuery,
+  AgentStreamEvent,
   ApplicantDocument,
   ApplicantIntake,
   ApplicantProfile,
@@ -283,6 +287,72 @@ function DocumentRow({ document }: { document: ApplicantDocument }) {
   );
 }
 
+function AgentChatCard({ profile }: { profile: ApplicantProfile }) {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [streamError, setStreamError] = useState("");
+  const suggestions = [
+    "What should I do next for my study pathway?",
+    "Which document would strengthen my profile most?",
+    "How can I prepare for Germany while learning German?",
+  ];
+
+  const agentMutation = useMutation({
+    mutationFn: async ({ query }: AgentQuery) => {
+      let fullAnswer = "";
+      let providerError = "";
+      setAnswer("");
+      setStreamError("");
+      await apiStream<AgentStreamEvent>("/agent/query/stream", { query }, (event) => {
+        if (event.type === "delta") {
+          fullAnswer += event.content;
+          setAnswer(fullAnswer);
+        }
+        if (event.type === "error") providerError = event.content;
+      });
+      if (providerError) throw new Error(providerError);
+      return fullAnswer;
+    },
+    onSuccess: () => setQuestion(""),
+    onError: (error) => setStreamError(error instanceof Error ? error.message : "The live agent could not answer right now."),
+  });
+
+  const ask = (value: string) => {
+    const query = value.trim();
+    if (query.length < 2 || agentMutation.isPending) return;
+    agentMutation.mutate({ query });
+  };
+
+  return (
+    <Card data-testid="agent-chat-card" className="soft-rise soft-rise-delay-1 mt-6 overflow-hidden border-[#d5d1c9] bg-[#fdfcf9] p-0 shadow-none">
+      <div className="flex flex-col gap-4 border-b border-[#ebe9e4] px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+        <div className="flex items-center gap-3">
+          <div data-testid="agent-chat-icon" className="flex size-10 items-center justify-center rounded-xl bg-[#4a6b53] text-white"><MessageCircle className="size-5" aria-hidden="true" /></div>
+          <div><p data-testid="agent-chat-overline" className="text-xs font-semibold uppercase tracking-[0.18em] text-[#879087]">Ask your agent</p><h2 data-testid="agent-chat-title" className="mt-1 font-heading text-xl font-extrabold tracking-tight text-[#2c3b2e]">A real answer, grounded in your profile</h2></div>
+        </div>
+        <span data-testid="agent-chat-provider" className="inline-flex w-fit items-center gap-2 rounded-full border border-[#c9d7ca] bg-[#edf4ee] px-3 py-1.5 text-xs font-semibold text-[#4a6b53]"><span className="size-1.5 rounded-full bg-[#4a6b53]" /> AICredits · GPT-5.4</span>
+      </div>
+      <div className="grid gap-6 p-6 sm:p-7 lg:grid-cols-[0.8fr_1.2fr]">
+        <div>
+          <p data-testid="agent-chat-description" className="text-sm leading-6 text-[#5c6b5e]">Ask about your pathway, missing evidence, language preparation, or what to do next. The agent sees the profile you have built here.</p>
+          <div data-testid="agent-chat-suggestions" className="mt-5 space-y-2">
+            {suggestions.map((suggestion, index) => <button type="button" key={suggestion} data-testid={`agent-chat-suggestion-${index + 1}`} onClick={() => { setQuestion(suggestion); ask(suggestion); }} className="group flex w-full items-center justify-between rounded-xl border border-[#ebe9e4] bg-white/70 px-3 py-2.5 text-left text-xs font-semibold text-[#5c6b5e] hover:-translate-y-0.5 hover:border-[#b9c5ba] hover:bg-[#edf4ee] hover:text-[#2c3b2e]"><span data-testid={`agent-chat-suggestion-label-${index + 1}`}>{suggestion}</span><ArrowUpRight className="size-3.5 shrink-0 text-[#879087] group-hover:text-[#4a6b53]" aria-hidden="true" /></button>)}
+          </div>
+        </div>
+        <div>
+          <form data-testid="agent-chat-form" onSubmit={(event) => { event.preventDefault(); ask(question); }} className="flex items-end gap-2 rounded-2xl border border-[#d5d1c9] bg-white p-2 shadow-sm focus-within:border-[#4a6b53] focus-within:ring-2 focus-within:ring-[#4a6b53]/10">
+            <textarea data-testid="agent-chat-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask what your next best step is…" className="min-h-16 flex-1 resize-none border-0 bg-transparent px-3 py-2 text-sm leading-6 text-[#2c3b2e] outline-none placeholder:text-[#9ca39c]" />
+            <Button data-testid="agent-chat-submit-button" type="submit" disabled={agentMutation.isPending || question.trim().length < 2} size="icon" className="size-10 shrink-0 rounded-xl bg-[#4a6b53] text-white hover:bg-[#3a5541] disabled:opacity-50"><Send className="size-4" aria-hidden="true" /><span className="sr-only">Ask agent</span></Button>
+          </form>
+          {agentMutation.isPending && <p data-testid="agent-chat-streaming-status" className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#a66350]"><span className="size-1.5 animate-pulse rounded-full bg-[#c27a65]" /> Reading your profile and thinking…</p>}
+          {streamError && <p data-testid="agent-chat-error" className="mt-3 text-xs font-semibold text-[#a66350]">{streamError}</p>}
+          {answer && <div data-testid="agent-chat-answer" className="mt-4 rounded-2xl bg-[#f1f5f1] p-5"><div className="flex items-center gap-2"><Sparkles className="size-4 text-[#4a6b53]" aria-hidden="true" /><p data-testid="agent-chat-answer-label" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#4a6b53]">Educaro agent</p></div><p data-testid="agent-chat-answer-content" className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#2c3b2e]">{answer}</p><p data-testid="agent-chat-answer-context" className="mt-4 border-t border-[#dce8de] pt-3 text-[11px] text-[#879087]">Grounded in {profile.name}’s current profile · Applicant facts are kept distinct from recommendations</p></div>}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function Home() {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("Overview");
@@ -404,6 +474,8 @@ export default function Home() {
               <Card data-testid="evidence-summary-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-5 shadow-none"><div className="flex items-center justify-between"><span data-testid="evidence-summary-label" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#879087]">Evidence mapped</span><FileText className="size-4 text-[#c27a65]" aria-hidden="true" /></div><p data-testid="evidence-summary-value" className="mt-4 font-heading text-lg font-extrabold text-[#2c3b2e]">{profile.documents.length} documents</p><p data-testid="evidence-summary-status" className="mt-1 text-xs text-[#879087]">{profile.documents.filter((doc) => doc.status === "verified").length} verified by you</p></Card>
               <Card data-testid="qualification-summary-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-5 shadow-none"><div className="flex items-center justify-between"><span data-testid="qualification-summary-label" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#879087]">Qualification signal</span><ClipboardCheck className="size-4 text-[#4a6b53]" aria-hidden="true" /></div><p data-testid="qualification-summary-value" className="mt-4 font-heading text-lg font-extrabold text-[#2c3b2e]">{profile.qualification_status === "ready" ? "Ready" : "Needs review"}</p><p data-testid="qualification-summary-status" className="mt-1 text-xs text-[#879087]">{profile.missing_items.length} open requirement{profile.missing_items.length === 1 ? "" : "s"}</p></Card>
             </section>
+
+            <AgentChatCard profile={profile} />
 
             <div className="mt-10 grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
               <Card data-testid="agent-recommendation-card" className="soft-rise soft-rise-delay-1 overflow-hidden border-[#d5d1c9] bg-[#fdfcf9] p-0 shadow-none">
