@@ -16,6 +16,9 @@ class ApplicantDocument(BaseModel):
     title: str
     status: Literal["verified", "review"] = "review"
     source: Literal["applicant-provided", "agent-generated"] = "applicant-provided"
+    file_id: str | None = None
+    content_type: str | None = None
+    file_size: int | None = None
 
 
 class AgentStep(BaseModel):

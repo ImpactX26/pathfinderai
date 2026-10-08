@@ -36,6 +36,15 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   return (await res.json()) as T;
 }
 
+export async function apiUpload<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "POST", body });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    throw new ApiError(res.status, errBody);
+  }
+  return (await res.json()) as T;
+}
+
 export async function apiStream<T>(
   path: string,
   body: JsonBody,

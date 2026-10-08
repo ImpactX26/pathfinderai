@@ -7,6 +7,9 @@ export interface ApplicantDocument {
   title: string;
   status: "verified" | "review";
   source: "applicant-provided" | "agent-generated";
+  file_id: string | null;
+  content_type: string | null;
+  file_size: number | null;
 }
 
 export interface AgentStep {
@@ -51,6 +54,11 @@ export interface ApplicantIntake {
 export interface DocumentCreate {
   kind: DocumentKind;
   title: string;
+}
+
+export interface DocumentUploadInput {
+  kind: DocumentKind;
+  file: File;
 }
 
 export interface AgentQuery {

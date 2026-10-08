@@ -38,7 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { apiGet, apiPost, apiStream } from "@/lib/api";
+import { apiGet, apiPost, apiStream, apiUpload } from "@/lib/api";
 import type {
   AgentQuery,
   AgentStreamEvent,
@@ -47,7 +47,7 @@ import type {
   ApplicantProfile,
   ConsultationBooking,
   ConsultationCreate,
-  DocumentCreate,
+  DocumentUploadInput,
   DocumentKind,
   Pathway,
 } from "@/lib/types";
@@ -67,8 +67,8 @@ const demoProfile: ApplicantProfile = {
   experience_years: 1,
   motivation: "I want to build a career in sustainable technology in Germany.",
   documents: [
-    { id: "degree", kind: "degree", title: "B.Tech Computer Science.pdf", status: "verified", source: "applicant-provided" },
-    { id: "language", kind: "language", title: "IELTS Academic certificate.pdf", status: "verified", source: "applicant-provided" },
+    { id: "degree", kind: "degree", title: "B.Tech Computer Science.pdf", status: "verified", source: "applicant-provided", file_id: null, content_type: null, file_size: null },
+    { id: "language", kind: "language", title: "IELTS Academic certificate.pdf", status: "verified", source: "applicant-provided", file_id: null, content_type: null, file_size: null },
   ],
   profile_completion: 63,
   qualification_status: "needs-review",
@@ -248,9 +248,9 @@ function IntakePanel({
   );
 }
 
-function DocumentPanel({ onClose, onSubmit, isSubmitting }: { onClose: () => void; onSubmit: (payload: DocumentCreate) => void; isSubmitting: boolean }) {
+function DocumentPanel({ onClose, onSubmit, isSubmitting }: { onClose: () => void; onSubmit: (payload: DocumentUploadInput) => void; isSubmitting: boolean }) {
   const [kind, setKind] = useState<DocumentKind>("cv");
-  const [title, setTitle] = useState("Aarav Mehta — CV.pdf");
+  const [file, setFile] = useState<File | null>(null);
   return (
     <div data-testid="document-panel-overlay" className="fixed inset-0 z-50 flex items-end justify-end bg-[#2c3b2e]/25 p-0 backdrop-blur-[2px] sm:p-5">
       <div data-testid="document-panel" className="w-full rounded-t-3xl border border-[#d5d1c9] bg-[#fdfcf9] p-6 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-8">
@@ -258,27 +258,24 @@ function DocumentPanel({ onClose, onSubmit, isSubmitting }: { onClose: () => voi
           <div>
             <p data-testid="document-panel-overline" className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#a66350]">Evidence locker</p>
             <h2 data-testid="document-panel-title" className="font-heading text-2xl font-extrabold tracking-tight text-[#2c3b2e]">Add a document</h2>
-            <p data-testid="document-panel-description" className="mt-2 text-sm leading-6 text-[#5c6b5e]">For this prototype, label the file you want the agent to review next.</p>
+            <p data-testid="document-panel-description" className="mt-2 text-sm leading-6 text-[#5c6b5e]">Upload the actual PDF or image you want the Educaro team to review.</p>
           </div>
           <Button data-testid="document-panel-close-button" variant="ghost" size="icon" onClick={onClose} className="rounded-full text-[#5c6b5e] hover:bg-[#ebe9e4] hover:text-[#2c3b2e]"><X className="size-5" aria-hidden="true" /><span className="sr-only">Close document panel</span></Button>
         </div>
-        <form data-testid="document-form" className="mt-8 space-y-5" onSubmit={(event) => { event.preventDefault(); onSubmit({ kind, title }); }}>
-          <div data-testid="upload-dropzone" className="rounded-2xl border border-dashed border-[#b9c5ba] bg-[#f1f5f1] p-6 text-center">
+        <form data-testid="document-form" className="mt-8 space-y-5" onSubmit={(event) => { event.preventDefault(); if (file) onSubmit({ kind, file }); }}>
+          <label htmlFor="document-file" data-testid="upload-dropzone" className="block cursor-pointer rounded-2xl border border-dashed border-[#b9c5ba] bg-[#f1f5f1] p-6 text-center hover:border-[#4a6b53] hover:bg-[#edf4ee]">
             <UploadCloud className="mx-auto mb-3 size-8 text-[#4a6b53]" aria-hidden="true" />
-            <p data-testid="upload-dropzone-title" className="text-sm font-semibold text-[#2c3b2e]">Document ready for review</p>
-            <p data-testid="upload-dropzone-description" className="mt-1 text-xs text-[#5c6b5e]">Agent classification is simulated for this demo.</p>
-          </div>
+            <p data-testid="upload-dropzone-title" className="text-sm font-semibold text-[#2c3b2e]">{file ? file.name : "Choose a PDF, JPG or PNG"}</p>
+            <p data-testid="upload-dropzone-description" className="mt-1 text-xs text-[#5c6b5e]">{file ? `${(file.size / 1024).toFixed(1)} KB selected` : "Maximum file size: 10 MB"}</p>
+            <input id="document-file" data-testid="document-file-input" type="file" accept="application/pdf,image/jpeg,image/png" required className="sr-only" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+          </label>
           <div>
             <label htmlFor="document-kind" data-testid="document-kind-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">Document type</label>
             <select id="document-kind" data-testid="document-kind-select" value={kind} onChange={(event) => setKind(event.target.value as DocumentKind)} className="h-11 w-full rounded-md border border-[#d5d1c9] bg-white px-3 text-sm text-[#2c3b2e] outline-none focus:border-[#4a6b53] focus:ring-2 focus:ring-[#4a6b53]/20">
               {(Object.keys(documentLabels) as DocumentKind[]).map((option) => <option key={option} value={option}>{documentLabels[option]}</option>)}
             </select>
           </div>
-          <div>
-            <label htmlFor="document-title" data-testid="document-title-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">File name</label>
-            <Input id="document-title" data-testid="document-title-input" value={title} onChange={(event) => setTitle(event.target.value)} className="h-11 border-[#d5d1c9] bg-white focus-visible:ring-[#4a6b53]" />
-          </div>
-          <Button data-testid="document-submit-button" type="submit" disabled={isSubmitting || title.trim().length < 2} className="w-full rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541] disabled:opacity-60">{isSubmitting ? "Adding to evidence locker…" : "Add for agent review"}</Button>
+          <Button data-testid="document-submit-button" type="submit" disabled={isSubmitting || !file} className="w-full rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541] disabled:opacity-60">{isSubmitting ? "Uploading securely…" : "Upload for review"}</Button>
         </form>
       </div>
     </div>
@@ -446,11 +443,16 @@ export default function Home() {
   });
 
   const documentMutation = useMutation({
-    mutationFn: (payload: DocumentCreate) => apiPost<ApplicantProfile>("/applicant/documents", payload),
+    mutationFn: ({ kind, file }: DocumentUploadInput) => {
+      const formData = new FormData();
+      formData.append("kind", kind);
+      formData.append("file", file);
+      return apiUpload<ApplicantProfile>("/applicant/documents/upload", formData);
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(["applicant"], updated);
       setShowDocumentPanel(false);
-      toast.success("Document added", { description: "The evidence is now in the agent review queue." });
+      toast.success("Document uploaded", { description: "The actual file is stored securely and available to the admin team." });
     },
     onError: () => toast.error("Could not add document", { description: "Please try again." }),
   });

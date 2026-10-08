@@ -2,17 +2,22 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 import hmac
 import os
+from urllib.parse import quote
 
 import jwt
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import Response as FileResponse
+from gridfs.errors import NoFile
 
-from lib.db import db
+from lib.db import db, get_document_files
 from models.admin import AdminBookedProfile, AdminLogin, AdminSession
 from models.applicant import ApplicantProfile, ConsultationBooking
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 COOKIE_NAME = "educaro_admin_session"
+ALLOWED_PREVIEW_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 
 
 def require_admin(request: Request) -> None:
@@ -92,3 +97,42 @@ async def booked_profiles(_: None = Depends(require_admin)) -> list[AdminBookedP
             )
         )
     return results
+
+
+@router.get("/documents/{document_id}")
+async def preview_document(
+    document_id: str,
+    _: None = Depends(require_admin),
+) -> FileResponse:
+    document_files = get_document_files()
+    applicant = await db.applicant_profiles.find_one(
+        {"documents.id": document_id},
+        {"documents": 1},
+    )
+    if not applicant:
+        raise HTTPException(status_code=404, detail="Document not found")
+    document = next(
+        (item for item in applicant.get("documents", []) if item.get("id") == document_id),
+        None,
+    )
+    if not document or not document.get("file_id"):
+        raise HTTPException(status_code=404, detail="This record has no stored file")
+    try:
+        grid_out = await document_files.open_download_stream(ObjectId(document["file_id"]))
+        content = await grid_out.read()
+    except (NoFile, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="Stored file not found") from exc
+
+    content_type = document.get("content_type")
+    if content_type not in ALLOWED_PREVIEW_TYPES:
+        raise HTTPException(status_code=415, detail="File type cannot be previewed")
+    filename = quote(document.get("title", "document"))
+    return FileResponse(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{filename}",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )

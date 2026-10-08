@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from lib.db import db
+from lib.db import db, get_document_files
 from lib.dates import today_iso
 from models.applicant import (
     AgentStep,
@@ -17,6 +18,12 @@ from models.applicant import (
 
 router = APIRouter(prefix="/applicant", tags=["applicant"])
 DEMO_ID = "demo-applicant"
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+ALLOWED_DOCUMENT_TYPES = {
+    "application/pdf": (".pdf", b"%PDF-"),
+    "image/jpeg": ((".jpg", ".jpeg"), b"\xff\xd8\xff"),
+    "image/png": (".png", b"\x89PNG\r\n\x1a\n"),
+}
 
 
 def build_assessment(
@@ -163,6 +170,65 @@ async def add_document(input: DocumentCreate) -> ApplicantProfile:
         motivation=current.motivation,
     )
     return await save_profile(profile)
+
+
+@router.post("/documents/upload", response_model=ApplicantProfile)
+async def upload_document(
+    kind: str = Form(...),
+    file: UploadFile = File(...),
+) -> ApplicantProfile:
+    document_files = get_document_files()
+    if kind not in {"degree", "language", "cv", "experience"}:
+        raise HTTPException(status_code=422, detail="Unsupported document type")
+    content_type = file.content_type or ""
+    allowed = ALLOWED_DOCUMENT_TYPES.get(content_type)
+    filename = Path(file.filename or "").name
+    if not allowed or not filename:
+        raise HTTPException(status_code=415, detail="Upload a PDF, JPG or PNG file")
+    extensions, signature = allowed
+    valid_extensions = (extensions,) if isinstance(extensions, str) else extensions
+    if Path(filename).suffix.lower() not in valid_extensions:
+        raise HTTPException(status_code=415, detail="File extension does not match its content type")
+
+    content = await file.read(MAX_DOCUMENT_BYTES + 1)
+    await file.close()
+    if len(content) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Document must be 10 MB or smaller")
+    if not content.startswith(signature):
+        raise HTTPException(status_code=415, detail="File content does not match the selected format")
+
+    file_id = await document_files.upload_from_stream(
+        filename,
+        content,
+        metadata={"content_type": content_type, "applicant_id": DEMO_ID},
+    )
+    applicant_document = ApplicantDocument(
+        kind=kind,  # type: ignore[arg-type]
+        title=filename,
+        status="review",
+        file_id=str(file_id),
+        content_type=content_type,
+        file_size=len(content),
+    )
+    current = await get_applicant()
+    documents = [*current.documents, applicant_document]
+    profile = build_assessment(
+        pathway=current.pathway,
+        education=current.education,
+        german_level=current.german_level,
+        english_level=current.english_level,
+        experience_years=current.experience_years,
+        documents=documents,
+        name=current.name,
+        email=current.email,
+        city=current.city,
+        motivation=current.motivation,
+    )
+    try:
+        return await save_profile(profile)
+    except Exception:
+        await document_files.delete(file_id)
+        raise
 
 
 @router.post("/consultations", response_model=ConsultationBooking)
