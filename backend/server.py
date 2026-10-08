@@ -19,6 +19,7 @@ load_dotenv(ROOT_DIR / '.env')
 from lib.db import client, db, ensure_indexes
 from routers.applicant import router as applicant_router
 from routers.agent import router as agent_router
+from routers.admin import router as admin_router
 
 
 # Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
@@ -36,6 +37,7 @@ app = FastAPI(lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 api_router.include_router(applicant_router)
 api_router.include_router(agent_router)
+api_router.include_router(admin_router)
 
 
 # Define Models

@@ -1,0 +1,47 @@
+{
+  "passed": 5,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [
+    "tests/test_tscheck_documents.py (pre-existing, prior iteration) POSTs a static-titled document to the shared singleton demo-applicant, which lands with status 'review'. It is not cleaned up afterward, so once pytest executes that file the demo-applicant again carries a review-status document until manually purged. This conflicts with the 'Demo review-queue documents are removed' criterion if that file runs after any admin check in a given pytest worker ordering (pytest-xdist here, so file order across workers isn't guaranteed). It did not cause a failure in this run because test_tscheck_admin_booked_profiles.py executed before test_tscheck_documents.py, but it is a latent flakiness source and a genuine fixture-discipline violation in that older test file (static title '`tscheck-journey-evidence.pdf`' mutates the one real applicant record instead of using an isolated fixture). Recommend giving test_tscheck_documents.py its own unique per-run title and/or a teardown that removes the document it added.",
+    "Residual 'tscheck-journey-evidence.pdf' (status review) document was found on the demo-applicant record at the start of this iteration (left over from a previous test run of the file above) and was removed via a direct DB cleanup before re-validating the 'no review documents' criterion."
+  ],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Admin panel is protected by a PIN session",
+      "name": "test_tscheck_admin_booked_profiles (login/session suite)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/admin/booked-profiles (no cookie) -> 401; POST /api/admin/login {pin:'0000'} -> 401 no cookie set; POST /api/admin/login {pin:'4826'} -> 200 {authenticated:true} with Set-Cookie educaro_admin_session; authenticated GET /api/admin/booked-profiles -> 200; POST /api/admin/logout -> 200 {authenticated:false}; subsequent GET -> 401."
+    },
+    {
+      "criterion": "Admin can view applicants who booked consultations; Admin can access uploaded document records; Demo review-queue documents are removed",
+      "name": "test_tscheck_admin_booked_profiles (data shape)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Authenticated GET /api/admin/booked-profiles -> 200, 1 record: applicant.email/pathway present, latest_consultation.preferred_date/preferred_time present, consultation_count>=1, documents[] each has title/source in {applicant-provided,agent-generated}/status != 'review' (2 verified docs on demo-applicant)."
+    },
+    {
+      "criterion": "Admin panel is protected by a PIN session; Admin can sign out safely",
+      "name": "admin-pin-login-shows-dashboard",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Signed-out /admin showed PIN form; PIN 4826 opened dashboard with title/storage card visible (MongoDB / Emergent app pod / metadata-records note); Sign out returned to admin-login-page and admin-dashboard-page disappeared (0 count)."
+    },
+    {
+      "criterion": "Admin can view applicants who booked consultations; Admin can access uploaded document records; Demo review-queue documents are removed; Database storage location is clearly explained",
+      "name": "admin-dashboard-shows-booked-profile-documents",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Dashboard stats (profile/booking/document counts) visible; first booked-profile card showed email/pathway/consultation date-time/booking count; first document row showed title/source/status; no document status rendered 'review' text and no 'Review queue' label found anywhere on the page."
+    },
+    {
+      "criterion": "Admin panel is protected by a PIN session (public ingress)",
+      "name": "admin-preview-pin-required",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Via https://agentic-ai-24.preview.emergentagent.com: /admin signed-out showed PIN form; page.request.get('/api/admin/booked-profiles') -> 401; PIN 4826 opened admin-dashboard-page through the real preview ingress."
+    }
+  ]
+}

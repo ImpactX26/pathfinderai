@@ -9,9 +9,9 @@ export function beginSession(): void {
 }
 
 // Call from every sign-out control; the hard redirect resets all in-memory state.
-export async function endSession(redirectTo: string = "/login"): Promise<void> {
+export async function endSession(redirectTo: string = "/admin"): Promise<void> {
   try {
-    await apiPost("/auth/logout");
+    await apiPost("/admin/logout");
   } finally {
     queryClient.clear();
     window.location.assign(redirectTo);

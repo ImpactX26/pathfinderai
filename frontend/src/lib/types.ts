@@ -75,3 +75,13 @@ export interface ConsultationBooking {
   status: "confirmed";
   created_at: string;
 }
+
+export interface AdminSession {
+  authenticated: boolean;
+}
+
+export interface AdminBookedProfile {
+  applicant: ApplicantProfile;
+  latest_consultation: ConsultationBooking;
+  consultation_count: number;
+}
