@@ -1,0 +1,142 @@
+{
+  "theme": "light",
+  "design_philosophy": {
+    "identity": "E1 The Anti-AI Designer",
+    "core_principles": [
+      "Fusion over Imitation: Mix organic earthy elements with high-density data visualization.",
+      "Emotion First: The platform should feel grounded, calm, and trustworthy, avoiding cold corporate SaaS aesthetics.",
+      "Negative Space: Generous spacing to create breathing room around complex educational data.",
+      "Contrast: Use rough vs. smooth, bold terracotta accents against calm bone-white backgrounds."
+    ]
+  },
+  "typography": {
+    "strategy": "The Soft Utility (Friendly + Clean)",
+    "fonts": {
+      "headings": "Manrope",
+      "body": "IBM Plex Sans",
+      "mono": "JetBrains Mono"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-none",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight leading-tight",
+      "h3": "text-xl sm:text-2xl tracking-tight",
+      "h4": "text-lg sm:text-xl font-semibold",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm",
+      "label_overline": "text-xs uppercase tracking-[0.2em] font-semibold"
+    },
+    "anti_patterns": [
+      "No Inter, Roboto, or Open Sans for headings.",
+      "No default bolding for everything; use weight contrast (e.g., Light vs ExtraBold)."
+    ]
+  },
+  "colors": {
+    "archetype": "ARCHETYPE 1: ORGANIC & EARTHY",
+    "palette": {
+      "background": {
+        "primary": "#F9F8F6", 
+        "secondary": "#EBE9E4",
+        "glass": "rgba(249, 248, 246, 0.7)"
+      },
+      "text": {
+        "primary": "#2C3B2E",
+        "secondary": "#5C6B5E",
+        "inverse": "#FFFFFF"
+      },
+      "primary": {
+        "default": "#4A6B53",
+        "hover": "#3A5541"
+      },
+      "accent": {
+        "terracotta": "#C27A65",
+        "terracotta_hover": "#A66350",
+        "ochre": "#D4A373"
+      },
+      "border": "#D5D1C9"
+    },
+    "rules": [
+      "Never use pure black or pure gray. Always tint neutral greys with warm tones.",
+      "DO NOT use teal green or teal blue (#1B93A4).",
+      "DO NOT use #7351B7."
+    ]
+  },
+  "layouts": {
+    "dashboard_grid": "MODE B: High Density Grid. Base Grid: grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with gap-4 or gap-6.",
+    "bento_grid": "MODE A: The 'Tetris' Grid for overview/marketing sections. gap-8 to gap-12.",
+    "spacing": "Generous Spacing Philosophy (Tailwind Scale: p-4 to p-12). Containers with borders must have internal padding.",
+    "alignment": "Left-align dense content and headings. Use optical alignment over geometric.",
+    "mobile_constraints": "Mobile-first responsive. Images MUST NOT exceed 80vh on mobile."
+  },
+  "surface_strategies": {
+    "cards": "Neumorphism Tactile Variant: Flat background matching parent, 1px subtle border (border-border), no default shadow. On hover: slight lift (-translate-y-1) and shadow-lg.",
+    "headers": "Crystal Glass: backdrop-blur-xl bg-[#F9F8F6]/70 with 1px delicate inner stroke. Never fully transparent.",
+    "interactive": "Must explicitly set text color on hover. Focus states must have higher contrast with focus-visible:ring-2 focus-visible:ring-primary/50."
+  },
+  "motion": {
+    "hover": "Subtle translate and shadow expansion (e.g., transition: transform 0.2s ease, box-shadow 0.2s ease).",
+    "entrance": "Staggered fade-up for list items and cards in the dashboard.",
+    "rules": [
+      "Respect prefers-reduced-motion.",
+      "DO NOT apply 'transition: all'."
+    ]
+  },
+  "components": {
+    "charts": "Use Recharts or Shadcn chart components with earthy palette colors.",
+    "buttons": "Pill-shaped (rounded-full) or subtle rounded (rounded-lg). Only use primary color for main CTAs.",
+    "forms": "Use Shadcn Input, Select, Form. Left-aligned labels.",
+    "navigation": "Visible sidebar or top nav with clear branding, user avatar, and active states."
+  },
+  "visual_enhancers": {
+    "textures": "Subtle SVG noise overlay on main background to kill digital flatness.",
+    "icons": "Use @phosphor-icons/react (Duotone weight) for a premium, tactile feel."
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1596486935250-3ca1fb5c45b8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODF8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMHdhcm0lMjBzYW5kJTIwdGV4dHVyZXxlbnwwfHx8fDE3OTE0NjMxNDl8MA&ixlib=rb-4.1.0&q=85",
+      "category": "background",
+      "description": "Windblown ripples in fine golden sand forming organic flowing patterns"
+    },
+    "student_avatar": {
+      "url": "https://images.unsplash.com/photo-1560543685-824b3c5e82ad?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxzdHVkZW50JTIwc3R1ZHlpbmclMjBvcmdhbmljJTIwY2FsbXxlbnwwfHx8fDE3OTE0NjMxNDN8MA&ixlib=rb-4.1.0&q=85",
+      "category": "avatar",
+      "description": "Student studying"
+    },
+    "ai_agent_avatar": {
+      "url": "https://images.unsplash.com/photo-1655582590501-3da761e09ae9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxmcmllbmRseSUyMHJvYm90JTIwYXZhdGFyJTIwZmFjZSUyMGlsbHVzdHJhdGlvbnxlbnwwfHx8fDE3OTE0NjMxNDN8MA&ixlib=rb-4.1.0&q=85",
+      "category": "avatar",
+      "description": "Friendly AI agent face"
+    },
+    "course_thumbnail_1": {
+      "url": "https://images.unsplash.com/photo-1505330622279-bf7d7fc918f4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxjYWxtJTIwc2VyZW5lJTIwZGVza3RvcCUyMHdvcmtzcGFjZXxlbnwwfHx8fDE3OTE0NjMxNDl8MA&ixlib=rb-4.1.0&q=85",
+      "category": "thumbnail",
+      "description": "Calm study workspace"
+    },
+    "course_thumbnail_2": {
+      "url": "https://images.unsplash.com/photo-1514369118554-e20d93546b30?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwxfHxzdHVkZW50JTIwc3R1ZHlpbmclMjBvcmdhbmljJTIwY2FsbXxlbnwwfHx8fDE3OTE0NjMxNDN8MA&ixlib=rb-4.1.0&q=85",
+      "category": "thumbnail",
+      "description": "Student writing"
+    }
+  },
+  "accessibility": {
+    "contrast": "Minimum 4.5:1 for normal text. Use Text Shadow over images.",
+    "testing_attributes": "All interactive elements MUST include data-testid attributes (e.g., data-testid='start-lesson-button')."
+  },
+  "instructions_to_main_agent": [
+    "Prioritize optical alignment and generous spacing.",
+    "Do NOT use HTML-based components for advanced interactions; use Shadcn UI.",
+    "Ensure 'data-testid' is present on all buttons, links, and forms.",
+    "Do not use transparent backgrounds for headers or sticky elements; use the defined crystal glass style.",
+    "Implement a Socratic AI Tutor interface and a Study Path Planner dashboard.",
+    "Do not center align the app container in CSS.",
+    "Never use placeholder images from dummy services, use only provided image_urls.",
+    "Use sonner for toasts.",
+    "Add transition properties explicitly to interactive elements; avoid 'transition: all'."
+  ],
+  "universal_guidelines_for_main_agent": [
+    "Avoid the 'AI slop' aesthetic. Create depth through layered design and z-index hierarchy.",
+    "Do not make generic centered layouts or simplistic gradients.",
+    "Use glass-morphism effects with backdrop filters.",
+    "Never use AI assistant emoji characters like \ud83e\udd16\ud83e\udde0\ud83d\udcad for icons. Use Phosphor Icons.",
+    "Every interaction needs micro-animations - hover states, transitions."
+  ]
+}

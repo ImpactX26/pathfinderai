@@ -1,0 +1,76 @@
+{
+  "passed": 9,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [
+    "Deterministic assessment rules are MOCKED rather than backed by a live LLM agent.",
+    "Document review/OCR, video processing/transcription, and external AI integrations are MOCKED demo surfaces.",
+    "No authentication is implemented for this public prototype."
+  ],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Integrated Educaro applicant journey is visible on the dashboard",
+      "name": "dashboard-profile-workspace-api",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/applicant -> 200; response id demo-applicant with pathway, documents, qualification, recommendation, and four agent steps."
+    },
+    {
+      "criterion": "Applicant intake progressively builds the profile",
+      "name": "intake-updates-assessment-api",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/applicant/intake -> 200; returned demo-applicant with submitted name/city, assessment fields, and four agent steps. Invalid payload -> 422."
+    },
+    {
+      "criterion": "Supporting documents can be added and clearly sourced",
+      "name": "documents-review-source-api",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/applicant/documents -> 200; returned tscheck-journey-evidence.pdf with kind cv, status review, source applicant-provided. Unknown kind -> 422."
+    },
+    {
+      "criterion": "Integrated Educaro applicant journey is visible on the dashboard",
+      "name": "educaro-dashboard-workspace",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Public preview displayed Educaro shell, pathway/profile cards, documents, qualification, recommendation, and agent trace; screenshot captured."
+    },
+    {
+      "criterion": "Applicant intake progressively builds the profile",
+      "name": "educaro-intake-updates-profile",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Continue intake opened the guided form; submitted Browser Check Applicant/Hyderabad, panel closed, and summary updated."
+    },
+    {
+      "criterion": "Supporting documents can be added and clearly sourced",
+      "name": "educaro-adds-evidence-document",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Add document opened evidence locker; submitted Browser Check Portfolio.pdf; list showed Applicant provided and Review queue after panel closed."
+    },
+    {
+      "criterion": "Qualification assessment shows requirements and next step",
+      "name": "educaro-qualification-next-step",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Qualification card showed progress number, current signal, Open requirements, recommendation copy, and enabled primary action."
+    },
+    {
+      "criterion": "Agent trace explains the workflow",
+      "name": "educaro-agent-trace-visible",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Agent trace visibly rendered Profile assembled, Evidence mapped, Requirements checked, and Next step selected with status markers."
+    },
+    {
+      "criterion": "Responsive desktop workspace remains usable",
+      "name": "educaro-desktop-layout-reachable",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "1280x720 desktop check showed sidebar/header/main content and successfully reached Documents and Qualification navigation targets."
+    }
+  ]
+}
