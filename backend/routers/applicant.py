@@ -1,13 +1,16 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from lib.db import db
+from lib.dates import today_iso
 from models.applicant import (
     AgentStep,
     ApplicantDocument,
     ApplicantIntake,
     ApplicantProfile,
+    ConsultationBooking,
+    ConsultationCreate,
     DocumentCreate,
 )
 
@@ -160,3 +163,16 @@ async def add_document(input: DocumentCreate) -> ApplicantProfile:
         motivation=current.motivation,
     )
     return await save_profile(profile)
+
+
+@router.post("/consultations", response_model=ConsultationBooking)
+async def book_consultation(input: ConsultationCreate) -> ConsultationBooking:
+    if input.preferred_date.isoformat() < today_iso():
+        raise HTTPException(status_code=422, detail="Choose today or a future date")
+    booking = ConsultationBooking(
+        applicant_id=DEMO_ID,
+        preferred_date=input.preferred_date,
+        preferred_time=input.preferred_time,
+    )
+    await db.consultations.insert_one(booking.model_dump(mode="json"))
+    return booking

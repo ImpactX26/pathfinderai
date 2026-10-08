@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 import uuid
 
@@ -60,3 +60,17 @@ class ApplicantIntake(BaseModel):
 class DocumentCreate(BaseModel):
     kind: DocumentKind
     title: str = Field(min_length=2)
+
+
+class ConsultationCreate(BaseModel):
+    preferred_date: date
+    preferred_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class ConsultationBooking(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    applicant_id: str
+    preferred_date: date
+    preferred_time: str
+    status: Literal["confirmed"] = "confirmed"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

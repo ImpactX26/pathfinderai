@@ -61,3 +61,17 @@ export interface AgentStreamEvent {
   type: "delta" | "done" | "error";
   content: string;
 }
+
+export interface ConsultationCreate {
+  preferred_date: string;
+  preferred_time: string;
+}
+
+export interface ConsultationBooking {
+  id: string;
+  applicant_id: string;
+  preferred_date: string;
+  preferred_time: string;
+  status: "confirmed";
+  created_at: string;
+}

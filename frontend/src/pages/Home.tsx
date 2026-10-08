@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   BriefcaseBusiness,
   Check,
+  CheckCircle2,
   ChevronRight,
   Circle,
   ClipboardCheck,
@@ -29,6 +30,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { apiGet, apiPost, apiStream } from "@/lib/api";
 import type {
   AgentQuery,
@@ -36,6 +45,8 @@ import type {
   ApplicantDocument,
   ApplicantIntake,
   ApplicantProfile,
+  ConsultationBooking,
+  ConsultationCreate,
   DocumentCreate,
   DocumentKind,
   Pathway,
@@ -158,7 +169,7 @@ function IntakePanel({
           </Button>
         </div>
 
-        <form data-testid="intake-form" className="mt-8 space-y-6" onSubmit={(event) => { event.preventDefault(); onSubmit(form); }}>
+        <form data-testid="intake-form" className="mt-8 space-y-6" onSubmit={(event) => { event.preventDefault(); onSubmit({ ...form, experience_years: form.pathway === "employment" ? form.experience_years : 0 }); }}>
           <div>
             <label data-testid="pathway-field-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">What are you moving towards?</label>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -200,7 +211,7 @@ function IntakePanel({
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className={`grid gap-4 ${form.pathway === "employment" ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             <div>
               <label htmlFor="german-level" data-testid="german-field-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">German level</label>
               <select id="german-level" data-testid="intake-german-select" value={form.german_level} onChange={(event) => update("german_level", event.target.value)} className="h-11 w-full rounded-md border border-[#d5d1c9] bg-white px-3 text-sm text-[#2c3b2e] outline-none focus:border-[#4a6b53] focus:ring-2 focus:ring-[#4a6b53]/20">
@@ -213,10 +224,10 @@ function IntakePanel({
                 {['B1', 'B2', 'C1', 'C2'].map((level) => <option key={level} value={level}>{level}</option>)}
               </select>
             </div>
-            <div>
+            {form.pathway === "employment" && <div data-testid="experience-field-container">
               <label htmlFor="experience-years" data-testid="experience-field-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">Experience (years)</label>
               <Input id="experience-years" data-testid="intake-experience-input" type="number" min="0" max="50" value={form.experience_years} onChange={(event) => update("experience_years", Number(event.target.value))} className="h-11 border-[#d5d1c9] bg-white focus-visible:ring-[#4a6b53]" />
-            </div>
+            </div>}
           </div>
 
           <div>
@@ -284,6 +295,68 @@ function DocumentRow({ document }: { document: ApplicantDocument }) {
       </div>
       <StatusMark status={document.status} testId={`document-${document.id}`} />
     </div>
+  );
+}
+
+function ConsultationDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [preferredDate, setPreferredDate] = useState("");
+  const [preferredTime, setPreferredTime] = useState("10:00");
+  const [booking, setBooking] = useState<ConsultationBooking | null>(null);
+
+  const bookingMutation = useMutation({
+    mutationFn: (payload: ConsultationCreate) => apiPost<ConsultationBooking>("/applicant/consultations", payload),
+    onSuccess: (confirmedBooking) => setBooking(confirmedBooking),
+    onError: () => toast.error("Could not book consultation", { description: "Choose today or a future date and try again." }),
+  });
+
+  const changeOpen = (nextOpen: boolean) => {
+    onOpenChange(nextOpen);
+    if (!nextOpen) {
+      setBooking(null);
+      setPreferredDate("");
+      setPreferredTime("10:00");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent data-testid="consultation-dialog" className="border-[#d5d1c9] bg-[#fdfcf9] sm:max-w-md">
+        {booking ? (
+          <div data-testid="consultation-confirmation" className="py-3 text-center">
+            <span data-testid="consultation-confirmation-icon" className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#e8efe9] text-[#4a6b53]"><CheckCircle2 className="size-7" aria-hidden="true" /></span>
+            <DialogHeader className="mt-5">
+              <DialogTitle data-testid="consultation-confirmation-title" className="text-center font-heading text-2xl font-extrabold text-[#2c3b2e]">Your consultation is booked</DialogTitle>
+              <DialogDescription data-testid="consultation-confirmation-description" className="text-center leading-6 text-[#5c6b5e]">An Educaro specialist will meet you on {booking.preferred_date} at {booking.preferred_time}.</DialogDescription>
+            </DialogHeader>
+            <Button data-testid="consultation-confirmation-close-button" onClick={() => changeOpen(false)} className="mt-6 rounded-full bg-[#4a6b53] px-8 text-white hover:bg-[#3a5541]">Done</Button>
+          </div>
+        ) : (
+          <form data-testid="consultation-form" onSubmit={(event) => { event.preventDefault(); bookingMutation.mutate({ preferred_date: preferredDate, preferred_time: preferredTime }); }}>
+            <DialogHeader>
+              <p data-testid="consultation-dialog-overline" className="text-xs font-semibold uppercase tracking-[0.18em] text-[#a66350]">Consultant handoff</p>
+              <DialogTitle data-testid="consultation-dialog-title" className="font-heading text-2xl font-extrabold text-[#2c3b2e]">Choose a preferred time</DialogTitle>
+              <DialogDescription data-testid="consultation-dialog-description" className="leading-6 text-[#5c6b5e]">Pick a date and time for your pathway consultation. Your booking will be confirmed here.</DialogDescription>
+            </DialogHeader>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="consultation-date" data-testid="consultation-date-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">Preferred date</label>
+                <Input id="consultation-date" data-testid="consultation-date-input" type="date" required value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} className="h-11 border-[#d5d1c9] bg-white focus-visible:ring-[#4a6b53]" />
+              </div>
+              <div>
+                <label htmlFor="consultation-time" data-testid="consultation-time-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">Preferred time</label>
+                <select id="consultation-time" data-testid="consultation-time-select" value={preferredTime} onChange={(event) => setPreferredTime(event.target.value)} className="h-11 w-full rounded-md border border-[#d5d1c9] bg-white px-3 text-sm text-[#2c3b2e] outline-none focus:border-[#4a6b53] focus:ring-2 focus:ring-[#4a6b53]/20">
+                  {["09:00", "10:00", "11:30", "14:00", "16:00"].map((time) => <option key={time} value={time}>{time}</option>)}
+                </select>
+              </div>
+            </div>
+            <DialogFooter className="mt-6">
+              <Button data-testid="consultation-cancel-button" type="button" variant="ghost" onClick={() => changeOpen(false)} className="rounded-full text-[#5c6b5e] hover:bg-[#ebe9e4] hover:text-[#2c3b2e]">Cancel</Button>
+              <Button data-testid="consultation-submit-button" type="submit" disabled={!preferredDate || bookingMutation.isPending} className="rounded-full bg-[#4a6b53] px-6 text-white hover:bg-[#3a5541] disabled:opacity-50">{bookingMutation.isPending ? "Booking…" : "Confirm consultation"}</Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -358,6 +431,7 @@ export default function Home() {
   const [activeSection, setActiveSection] = useState("Overview");
   const [showIntake, setShowIntake] = useState(false);
   const [showDocumentPanel, setShowDocumentPanel] = useState(false);
+  const [showConsultation, setShowConsultation] = useState(false);
   const applicantQuery = useQuery({ queryKey: ["applicant"], queryFn: () => apiGet<ApplicantProfile>("/applicant"), retry: false });
   const profile = applicantQuery.data ?? demoProfile;
 
@@ -480,7 +554,7 @@ export default function Home() {
             <div className="mt-10 grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
               <Card data-testid="agent-recommendation-card" className="soft-rise soft-rise-delay-1 overflow-hidden border-[#d5d1c9] bg-[#fdfcf9] p-0 shadow-none">
                 <div className="flex items-center justify-between border-b border-[#ebe9e4] px-6 py-5 sm:px-7"><div className="flex items-center gap-3"><div data-testid="agent-recommendation-icon" className="flex size-9 items-center justify-center rounded-xl bg-[#e8efe9] text-[#4a6b53]"><Sparkles className="size-4" aria-hidden="true" /></div><div><p data-testid="agent-recommendation-overline" className="text-xs font-semibold uppercase tracking-[0.17em] text-[#879087]">Agent recommendation</p><p data-testid="agent-recommendation-title" className="mt-1 text-sm font-bold text-[#2c3b2e]">The route I’d take next</p></div></div><Badge data-testid="agent-recommendation-badge" className="bg-[#f4e6df] text-[#8f503f] hover:bg-[#f4e6df]">{profile.qualification_status === "ready" ? "Ready" : "In progress"}</Badge></div>
-                <div data-testid="recommendation-body" className="p-6 sm:p-7"><p data-testid="recommendation-copy" className="max-w-xl font-heading text-2xl font-extrabold leading-tight tracking-tight text-[#2c3b2e]">{profile.recommended_next_step}</p><p data-testid="recommendation-detail" className="mt-4 max-w-xl text-sm leading-6 text-[#5c6b5e]">The agent compares your stated pathway with the evidence you have shared, then flags only the gaps that change your recommendation.</p><div className="mt-7 flex flex-wrap gap-3"><Button data-testid="recommendation-primary-button" onClick={() => profile.missing_items.length > 0 && profile.missing_items.some((item) => item.toLowerCase().includes("cv")) ? setShowDocumentPanel(true) : setShowIntake(true)} className="rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541]">{profile.missing_items.length > 0 ? "Close the next gap" : "Book consultation"}<ArrowUpRight className="ml-2 size-4" aria-hidden="true" /></Button><button type="button" data-testid="recommendation-secondary-button" onClick={() => goTo("Qualification")} className="rounded-full px-4 text-sm font-bold text-[#4a6b53] hover:bg-[#edf4ee]">See the reasoning <ChevronRight className="ml-1 inline size-4" aria-hidden="true" /></button></div></div>
+                <div data-testid="recommendation-body" className="p-6 sm:p-7"><p data-testid="recommendation-copy" className="max-w-xl font-heading text-2xl font-extrabold leading-tight tracking-tight text-[#2c3b2e]">{profile.recommended_next_step}</p><p data-testid="recommendation-detail" className="mt-4 max-w-xl text-sm leading-6 text-[#5c6b5e]">The agent compares your stated pathway with the evidence you have shared, then flags only the gaps that change your recommendation.</p><div className="mt-7 flex flex-wrap gap-3"><Button data-testid="recommendation-primary-button" onClick={() => { if (profile.missing_items.length === 0) setShowConsultation(true); else if (profile.missing_items.some((item) => item.toLowerCase().includes("cv"))) setShowDocumentPanel(true); else setShowIntake(true); }} className="rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541]">{profile.missing_items.length > 0 ? "Close the next gap" : "Book consultation"}<ArrowUpRight className="ml-2 size-4" aria-hidden="true" /></Button><button type="button" data-testid="recommendation-secondary-button" onClick={() => goTo("Qualification")} className="rounded-full px-4 text-sm font-bold text-[#4a6b53] hover:bg-[#edf4ee]">See the reasoning <ChevronRight className="ml-1 inline size-4" aria-hidden="true" /></button></div></div>
               </Card>
 
               <Card id="qualification-section" data-testid="qualification-card" className="soft-rise soft-rise-delay-2 border-[#d5d1c9] bg-[#2c3b2e] p-6 text-white shadow-none sm:p-7">
@@ -509,6 +583,7 @@ export default function Home() {
       </div>
       {showIntake && <IntakePanel profile={profile} onClose={() => setShowIntake(false)} onSubmit={(payload) => intakeMutation.mutate(payload)} isSubmitting={intakeMutation.isPending} />}
       {showDocumentPanel && <DocumentPanel onClose={() => setShowDocumentPanel(false)} onSubmit={(payload) => documentMutation.mutate(payload)} isSubmitting={documentMutation.isPending} />}
+      <ConsultationDialog open={showConsultation} onOpenChange={setShowConsultation} />
     </div>
   );
 }
