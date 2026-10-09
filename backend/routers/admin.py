@@ -2,22 +2,20 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 import hmac
 import os
-from urllib.parse import quote
 
 import jwt
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as FileResponse
-from gridfs.errors import NoFile
 
-from lib.db import db, get_document_files
-from models.admin import AdminBookedProfile, AdminLogin, AdminSession
-from models.applicant import ApplicantProfile, ConsultationBooking
+from lib.db import db
+from lib.documents import document_preview
+from models.admin import AdminBookedProfile, AdminDocumentDecision, AdminLogin, AdminSession
+from models.applicant import ApplicantDocument, ApplicantProfile, ConsultationBooking
+from routers.applicant import refresh_assessment
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 COOKIE_NAME = "educaro_admin_session"
-ALLOWED_PREVIEW_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 
 
 def require_admin(request: Request) -> None:
@@ -91,7 +89,7 @@ async def booked_profiles(_: None = Depends(require_admin)) -> list[AdminBookedP
         seen_applicants.add(applicant_id)
         results.append(
             AdminBookedProfile(
-                applicant=ApplicantProfile(**applicant_document),
+                applicant=refresh_assessment(ApplicantProfile(**applicant_document)),
                 latest_consultation=ConsultationBooking(**booking_document),
                 consultation_count=booking_counts[applicant_id],
             )
@@ -104,7 +102,6 @@ async def preview_document(
     document_id: str,
     _: None = Depends(require_admin),
 ) -> FileResponse:
-    document_files = get_document_files()
     applicant = await db.applicant_profiles.find_one(
         {"documents.id": document_id},
         {"documents": 1},
@@ -115,24 +112,28 @@ async def preview_document(
         (item for item in applicant.get("documents", []) if item.get("id") == document_id),
         None,
     )
-    if not document or not document.get("file_id"):
-        raise HTTPException(status_code=404, detail="This record has no stored file")
-    try:
-        grid_out = await document_files.open_download_stream(ObjectId(document["file_id"]))
-        content = await grid_out.read()
-    except (NoFile, ValueError) as exc:
-        raise HTTPException(status_code=404, detail="Stored file not found") from exc
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return await document_preview(ApplicantDocument(**document))
 
-    content_type = document.get("content_type")
-    if content_type not in ALLOWED_PREVIEW_TYPES:
-        raise HTTPException(status_code=415, detail="File type cannot be previewed")
-    filename = quote(document.get("title", "document"))
-    return FileResponse(
-        content=content,
-        media_type=content_type,
-        headers={
-            "Content-Disposition": f"inline; filename*=UTF-8''{filename}",
-            "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "private, no-store",
-        },
+
+@router.patch("/documents/{document_id}/decision", response_model=ApplicantDocument)
+async def decide_document(
+    document_id: str,
+    input: AdminDocumentDecision,
+    _: None = Depends(require_admin),
+) -> ApplicantDocument:
+    applicant = await db.applicant_profiles.find_one({"documents.id": document_id}, {"documents": 1})
+    if not applicant:
+        raise HTTPException(status_code=404, detail="Document not found")
+    document = next(item for item in applicant["documents"] if item["id"] == document_id)
+    if not document.get("file_id"):
+        raise HTTPException(status_code=422, detail="A stored file is required before making a decision")
+    status = "verified" if input.decision == "accept" else "rejected"
+    result = await db.applicant_profiles.update_one(
+        {"_id": applicant["_id"], "documents": {"$elemMatch": {"id": document_id, "file_id": input.file_id}}},
+        {"$set": {"documents.$.status": status, "updated_at": datetime.now(timezone.utc)}},
     )
+    if result.matched_count != 1:
+        raise HTTPException(status_code=409, detail="This file was replaced. Refresh the profile before reviewing it")
+    return ApplicantDocument(**{**document, "status": status})

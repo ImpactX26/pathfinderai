@@ -14,16 +14,16 @@ import {
   LogOut,
   Mail,
   MapPin,
-  ShieldCheck,
   UserRound,
   UsersRound,
-  Eye,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { RequiredDocuments } from "@/components/required-documents";
+import { AdminDocumentRow } from "@/components/admin-document-row";
 import { apiGet, apiPost } from "@/lib/api";
 import { beginSession, endSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -104,7 +104,8 @@ function ProfileRecord({ record }: { record: AdminBookedProfile }) {
         <div>
           <div className="flex items-center justify-between"><p data-testid={`admin-documents-title-${applicant.id}`} className="text-xs font-semibold uppercase tracking-[0.18em] text-[#879087]">Document records</p><span data-testid={`admin-documents-count-${applicant.id}`} className="text-xs font-semibold text-[#4a6b53]">{applicant.documents.length} available</span></div>
           <div data-testid={`admin-documents-list-${applicant.id}`} className="mt-4 space-y-2">
-            {applicant.documents.length > 0 ? applicant.documents.map((document) => <div data-testid={`admin-document-${document.id}`} key={document.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-[#ebe9e4] bg-white p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4e6df] text-[#a66350]"><FileText className="size-4" aria-hidden="true" /></span><div className="min-w-0 flex-1"><p data-testid={`admin-document-title-${document.id}`} className="truncate text-sm font-semibold text-[#2c3b2e]">{document.title}</p><p data-testid={`admin-document-source-${document.id}`} className="mt-0.5 text-xs text-[#879087]">{document.source === "applicant-provided" ? "Applicant provided" : "Agent generated"}{document.file_size ? ` · ${(document.file_size / 1024).toFixed(1)} KB` : " · Metadata only"}</p></div><span data-testid={`admin-document-status-${document.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#4a6b53]"><ShieldCheck className="size-3.5" aria-hidden="true" />{document.status}</span>{document.file_id ? <a data-testid={`admin-document-view-${document.id}`} href={`/api/admin/documents/${document.id}`} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full border-[#b9c5ba] text-[#4a6b53] hover:bg-[#edf4ee] hover:text-[#3a5541]")}><Eye className="mr-1.5 size-4" aria-hidden="true" />View</a> : <span data-testid={`admin-document-unavailable-${document.id}`} className="rounded-full bg-[#f1f0ec] px-3 py-1.5 text-xs font-semibold text-[#879087]">File unavailable</span>}</div>) : <p data-testid={`admin-documents-empty-${applicant.id}`} className="rounded-xl border border-dashed border-[#d5d1c9] p-5 text-center text-sm text-[#879087]">No document records available.</p>}
+            <RequiredDocuments profile={applicant} testId={`admin-required-documents-${applicant.id}`} />
+            {applicant.documents.length > 0 ? applicant.documents.map((document) => <AdminDocumentRow key={document.id} document={document} />) : <p data-testid={`admin-documents-empty-${applicant.id}`} className="rounded-xl border border-dashed border-[#d5d1c9] p-5 text-center text-sm text-[#879087]">No document records available.</p>}
           </div>
         </div>
       </div>
@@ -137,7 +138,7 @@ export default function Admin() {
       <main className="mx-auto max-w-7xl p-5 sm:p-8">
         <section data-testid="admin-dashboard-intro" className="grid gap-5 lg:grid-cols-[1.4fr_0.6fr]">
           <Card className="border-[#d5d1c9] bg-[#2c3b2e] p-7 text-white shadow-none sm:p-9"><p data-testid="admin-dashboard-overline" className="text-xs font-semibold uppercase tracking-[0.2em] text-[#d4a373]">Booked applicant profiles</p><h1 data-testid="admin-dashboard-title" className="mt-3 max-w-2xl font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">The people ready for an Educaro conversation.</h1><p data-testid="admin-dashboard-description" className="mt-4 max-w-xl text-sm leading-6 text-white/65">Review the latest consultation preference, profile context and applicant-provided document records in one protected workspace.</p></Card>
-          <Card data-testid="admin-storage-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-6 shadow-none"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-[#edf4ee] text-[#4a6b53]"><Database className="size-4" aria-hidden="true" /></span><div><p data-testid="admin-storage-title" className="text-sm font-bold text-[#2c3b2e]">MongoDB GridFS · database “app”</p><p data-testid="admin-storage-location" className="mt-1 text-xs text-[#879087]">Stored in the Emergent app pod</p></div></div><p data-testid="admin-storage-note" className="mt-5 text-xs leading-5 text-[#5c6b5e]">New PDF and image uploads are stored as real files in GridFS and can be opened only through an authenticated admin session.</p></Card>
+          <Card data-testid="admin-storage-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-6 shadow-none"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-[#edf4ee] text-[#4a6b53]"><Database className="size-4" aria-hidden="true" /></span><div><p data-testid="admin-storage-title" className="text-sm font-bold text-[#2c3b2e]">Secure document review</p><p data-testid="admin-storage-location" className="mt-1 text-xs text-[#879087]">PDF and image files stored in GridFS</p></div></div><p data-testid="admin-storage-note" className="mt-5 text-xs leading-5 text-[#5c6b5e]">Viewing a file does not verify it. Choose Accept to mark it verified, or Reject to ask the applicant to resubmit. Applicants can preview only their own files awaiting review.</p></Card>
         </section>
         <section data-testid="admin-stats" className="mt-6 grid gap-4 sm:grid-cols-3">
           <Card className="border-[#d5d1c9] bg-[#fdfcf9] p-5 shadow-none"><UsersRound className="size-4 text-[#4a6b53]" aria-hidden="true" /><p data-testid="admin-profile-count" className="mt-4 font-heading text-3xl font-extrabold">{records.length}</p><p data-testid="admin-profile-count-label" className="mt-1 text-xs text-[#879087]">Booked applicants</p></Card>

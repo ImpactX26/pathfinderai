@@ -3,11 +3,11 @@ import logging
 import os
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from models.agent import AgentQuery
-from routers.applicant import get_applicant
+from routers.applicant import get_current_applicant
 
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -19,12 +19,12 @@ def stream_event(payload: dict[str, str]) -> str:
 
 
 @router.post("/query/stream")
-async def query_agent(input: AgentQuery) -> StreamingResponse:
+async def query_agent(input: AgentQuery, request: Request) -> StreamingResponse:
     api_key = os.environ.get("AICREDITS_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="The agent provider is not configured")
 
-    profile = await get_applicant()
+    profile = await get_current_applicant(request)
     missing = ", ".join(profile.missing_items) if profile.missing_items else "none"
     system_message = f"""
 You are Educaro, a precise and encouraging Germany applicant journey agent.

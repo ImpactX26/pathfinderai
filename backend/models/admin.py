@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from models.applicant import ApplicantProfile, ConsultationBooking
@@ -9,6 +11,11 @@ class AdminLogin(BaseModel):
 
 class AdminSession(BaseModel):
     authenticated: bool
+
+
+class AdminDocumentDecision(BaseModel):
+    decision: Literal["accept", "reject"]
+    file_id: str = Field(min_length=1)
 
 
 class AdminBookedProfile(BaseModel):

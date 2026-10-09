@@ -14,7 +14,7 @@ class ApplicantDocument(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     kind: DocumentKind
     title: str
-    status: Literal["verified", "review"] = "review"
+    status: Literal["verified", "review", "rejected"] = "review"
     source: Literal["applicant-provided", "agent-generated"] = "applicant-provided"
     file_id: str | None = None
     content_type: str | None = None
@@ -39,6 +39,7 @@ class ApplicantProfile(BaseModel):
     experience_years: int = 0
     motivation: str
     documents: list[ApplicantDocument] = Field(default_factory=list)
+    required_document_kinds: list[DocumentKind] = Field(default_factory=lambda: ["degree", "language"])
     profile_completion: int = 0
     qualification_status: QualificationStatus = "incomplete"
     qualification_label: str

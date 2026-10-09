@@ -5,7 +5,7 @@ export interface ApplicantDocument {
   id: string;
   kind: DocumentKind;
   title: string;
-  status: "verified" | "review";
+  status: "verified" | "review" | "rejected";
   source: "applicant-provided" | "agent-generated";
   file_id: string | null;
   content_type: string | null;
@@ -30,6 +30,7 @@ export interface ApplicantProfile {
   experience_years: number;
   motivation: string;
   documents: ApplicantDocument[];
+  required_document_kinds: DocumentKind[];
   profile_completion: number;
   qualification_status: "ready" | "needs-review" | "incomplete";
   qualification_label: string;
@@ -59,6 +60,7 @@ export interface DocumentCreate {
 export interface DocumentUploadInput {
   kind: DocumentKind;
   file: File;
+  document_id?: string;
 }
 
 export interface AgentQuery {
@@ -86,6 +88,11 @@ export interface ConsultationBooking {
 
 export interface AdminSession {
   authenticated: boolean;
+}
+
+export interface AdminDocumentDecision {
+  decision: "accept" | "reject";
+  file_id: string;
 }
 
 export interface AdminBookedProfile {

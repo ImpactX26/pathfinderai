@@ -11,6 +11,7 @@ import {
   Circle,
   ClipboardCheck,
   Clock3,
+  Eye,
   FileText,
   GraduationCap,
   Languages,
@@ -22,14 +23,16 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UploadCloud,
   UserRound,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { RequiredDocuments, documentLabels } from "@/components/required-documents";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { apiGet, apiPost, apiStream, apiUpload } from "@/lib/api";
+import { apiDelete, apiGet, apiPost, apiStream, apiUpload } from "@/lib/api";
 import type {
   AgentQuery,
   AgentStreamEvent,
@@ -70,15 +73,16 @@ const demoProfile: ApplicantProfile = {
     { id: "degree", kind: "degree", title: "B.Tech Computer Science.pdf", status: "verified", source: "applicant-provided", file_id: null, content_type: null, file_size: null },
     { id: "language", kind: "language", title: "IELTS Academic certificate.pdf", status: "verified", source: "applicant-provided", file_id: null, content_type: null, file_size: null },
   ],
-  profile_completion: 63,
+  required_document_kinds: ["degree", "language"],
+  profile_completion: 67,
   qualification_status: "needs-review",
   qualification_label: "Almost ready — a few details needed",
-  missing_items: ["German language level B1 or above", "Current CV", "Motivation for Germany"],
-  recommended_next_step: "Add your current CV to unlock your recommendation",
+  missing_items: ["Degree certificate", "Language certificate"],
+  recommended_next_step: "Upload your degree certificate to unlock your recommendation",
   agent_steps: [
     { label: "Profile assembled", detail: "Applicant-provided details structured", status: "complete" },
     { label: "Evidence mapped", detail: "2 supporting documents linked", status: "complete" },
-    { label: "Requirements checked", detail: "3 open requirements found", status: "active" },
+    { label: "Requirements checked", detail: "2 required uploads needed", status: "active" },
     { label: "Next step selected", detail: "Waiting for missing evidence", status: "pending" },
   ],
   updated_at: new Date().toISOString(),
@@ -96,13 +100,6 @@ const pathwayIcons: Record<Pathway, typeof GraduationCap> = {
   employment: UserRound,
 };
 
-const documentLabels: Record<DocumentKind, string> = {
-  degree: "Degree / certificate",
-  language: "Language certificate",
-  cv: "Current CV",
-  experience: "Experience letter",
-};
-
 function initials(name: string) {
   return name
     .split(" ")
@@ -116,8 +113,10 @@ function formatPathway(pathway: Pathway) {
   return pathwayLabels[pathway];
 }
 
-function StatusMark({ status, testId }: { status: "verified" | "review"; testId: string }) {
-  return status === "verified" ? (
+function StatusMark({ status, testId }: { status: ApplicantDocument["status"]; testId: string }) {
+  return status === "rejected" ? (
+    <span data-testid={`${testId}-rejected-mark`} className="inline-flex items-center gap-1 text-xs font-semibold text-destructive"><AlertCircle className="size-3.5" aria-hidden="true" /> Not accepted</span>
+  ) : status === "verified" ? (
     <span data-testid={`${testId}-verified-mark`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#4a6b53]">
       <ShieldCheck className="size-3.5" aria-hidden="true" /> Verified
     </span>
@@ -190,6 +189,7 @@ function IntakePanel({
                 );
               })}
             </div>
+            <p data-testid="intake-document-requirements" className="mt-3 rounded-xl border border-border bg-secondary/40 p-3 text-xs leading-5 text-muted-foreground">Degree and language certificates are compulsory for all pathways.{form.pathway === "employment" ? " You will also need a current CV and experience letter." : " CV and experience letter are only needed for employment."} Upload these in your evidence locker after saving.</p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -248,21 +248,23 @@ function IntakePanel({
   );
 }
 
-function DocumentPanel({ onClose, onSubmit, isSubmitting }: { onClose: () => void; onSubmit: (payload: DocumentUploadInput) => void; isSubmitting: boolean }) {
-  const [kind, setKind] = useState<DocumentKind>("cv");
+function DocumentPanel({ profile, resubmission, onClose, onSubmit, isSubmitting }: { profile: ApplicantProfile; resubmission: ApplicantDocument | null; onClose: () => void; onSubmit: (payload: DocumentUploadInput) => void; isSubmitting: boolean }) {
+  const availableKinds = resubmission ? [resubmission.kind] : profile.required_document_kinds;
+  const [kind, setKind] = useState<DocumentKind>(() => resubmission?.kind ?? availableKinds.find((option) => !profile.documents.some((document) => document.kind === option && document.file_id && document.status !== "rejected")) ?? "degree");
   const [file, setFile] = useState<File | null>(null);
   return (
     <div data-testid="document-panel-overlay" className="fixed inset-0 z-50 flex items-end justify-end bg-[#2c3b2e]/25 p-0 backdrop-blur-[2px] sm:p-5">
-      <div data-testid="document-panel" className="w-full rounded-t-3xl border border-[#d5d1c9] bg-[#fdfcf9] p-6 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-8">
+      <div data-testid="document-panel" className="max-h-[96svh] w-full overflow-y-auto rounded-t-3xl border border-[#d5d1c9] bg-[#fdfcf9] p-6 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-8">
         <div className="flex items-start justify-between">
           <div>
             <p data-testid="document-panel-overline" className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#a66350]">Evidence locker</p>
-            <h2 data-testid="document-panel-title" className="font-heading text-2xl font-extrabold tracking-tight text-[#2c3b2e]">Add a document</h2>
-            <p data-testid="document-panel-description" className="mt-2 text-sm leading-6 text-[#5c6b5e]">Upload the actual PDF or image you want the Educaro team to review.</p>
+            <h2 data-testid="document-panel-title" className="font-heading text-2xl font-extrabold tracking-tight text-[#2c3b2e]">{resubmission ? "Resubmit your document" : "Add a document"}</h2>
+            <p data-testid="document-panel-description" className="mt-2 text-sm leading-6 text-[#5c6b5e]">{profile.pathway === "employment" ? "Degree certificate, language certificate, current CV and experience letter are compulsory for employment." : "Degree and language certificates are compulsory for your pathway."} Upload a PDF or image for review.</p>
           </div>
           <Button data-testid="document-panel-close-button" variant="ghost" size="icon" onClick={onClose} className="rounded-full text-[#5c6b5e] hover:bg-[#ebe9e4] hover:text-[#2c3b2e]"><X className="size-5" aria-hidden="true" /><span className="sr-only">Close document panel</span></Button>
         </div>
-        <form data-testid="document-form" className="mt-8 space-y-5" onSubmit={(event) => { event.preventDefault(); if (file) onSubmit({ kind, file }); }}>
+        {resubmission && <p data-testid="document-resubmit-notice" className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs leading-5 text-destructive">Document not accepted. Please resubmit. Your new file will replace {resubmission.title} and return to the review queue.</p>}
+        <form data-testid="document-form" className="mt-8 space-y-5" onSubmit={(event) => { event.preventDefault(); if (file) onSubmit({ kind, file, document_id: resubmission?.id }); }}>
           <label htmlFor="document-file" data-testid="upload-dropzone" className="block cursor-pointer rounded-2xl border border-dashed border-[#b9c5ba] bg-[#f1f5f1] p-6 text-center hover:border-[#4a6b53] hover:bg-[#edf4ee]">
             <UploadCloud className="mx-auto mb-3 size-8 text-[#4a6b53]" aria-hidden="true" />
             <p data-testid="upload-dropzone-title" className="text-sm font-semibold text-[#2c3b2e]">{file ? file.name : "Choose a PDF, JPG or PNG"}</p>
@@ -271,27 +273,54 @@ function DocumentPanel({ onClose, onSubmit, isSubmitting }: { onClose: () => voi
           </label>
           <div>
             <label htmlFor="document-kind" data-testid="document-kind-label" className="mb-2 block text-sm font-semibold text-[#2c3b2e]">Document type</label>
-            <select id="document-kind" data-testid="document-kind-select" value={kind} onChange={(event) => setKind(event.target.value as DocumentKind)} className="h-11 w-full rounded-md border border-[#d5d1c9] bg-white px-3 text-sm text-[#2c3b2e] outline-none focus:border-[#4a6b53] focus:ring-2 focus:ring-[#4a6b53]/20">
-              {(Object.keys(documentLabels) as DocumentKind[]).map((option) => <option key={option} value={option}>{documentLabels[option]}</option>)}
+            <select id="document-kind" data-testid="document-kind-select" disabled={Boolean(resubmission)} value={kind} onChange={(event) => setKind(event.target.value as DocumentKind)} className="h-11 w-full rounded-md border border-[#d5d1c9] bg-white px-3 text-sm text-[#2c3b2e] outline-none focus:border-[#4a6b53] focus:ring-2 focus:ring-[#4a6b53]/20">
+              {availableKinds.map((option) => <option data-testid={`document-kind-option-${option}`} key={option} value={option} label={`${documentLabels[option]} · Required`} />)}
             </select>
           </div>
-          <Button data-testid="document-submit-button" type="submit" disabled={isSubmitting || !file} className="w-full rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541] disabled:opacity-60">{isSubmitting ? "Uploading securely…" : "Upload for review"}</Button>
+          <Button data-testid="document-submit-button" type="submit" disabled={isSubmitting || !file} className="w-full rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541] disabled:opacity-60">{isSubmitting ? "Uploading securely…" : resubmission ? "Resubmit for review" : "Upload for review"}</Button>
         </form>
       </div>
     </div>
   );
 }
 
-function DocumentRow({ document }: { document: ApplicantDocument }) {
+function DocumentRow({ document, onRemove, onResubmit, canResubmit }: { document: ApplicantDocument; onRemove: (document: ApplicantDocument) => void; onResubmit: (document: ApplicantDocument) => void; canResubmit: boolean }) {
   return (
-    <div data-testid={`document-row-${document.id}`} className="flex items-center gap-3 rounded-xl border border-[#ebe9e4] bg-white/70 p-3">
-      <div data-testid={`document-icon-${document.id}`} className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4e6df] text-[#a66350]"><FileText className="size-4" aria-hidden="true" /></div>
-      <div className="min-w-0 flex-1">
-        <p data-testid={`document-title-${document.id}`} className="truncate text-sm font-semibold text-[#2c3b2e]">{document.title}</p>
-        <p data-testid={`document-type-${document.id}`} className="mt-0.5 text-xs text-[#879087]">{documentLabels[document.kind]} · {document.source === "applicant-provided" ? "Applicant provided" : "Agent generated"}</p>
+    <div data-testid={`document-row-${document.id}`} className={`rounded-xl border bg-background/60 p-3 ${document.status === "rejected" ? "border-destructive/40" : "border-border"}`}>
+      <div className="flex items-start gap-3">
+        <div data-testid={`document-icon-${document.id}`} className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"><FileText className="size-4" aria-hidden="true" /></div>
+        <div className="min-w-0 flex-1">
+          <p data-testid={`document-title-${document.id}`} className="break-words text-sm font-semibold text-foreground">{document.title}</p>
+          <p data-testid={`document-type-${document.id}`} className="mt-0.5 text-xs text-muted-foreground">{documentLabels[document.kind]} · {document.source === "applicant-provided" ? "Applicant provided" : "Agent generated"}</p>
+        </div>
+        <Button data-testid={`document-remove-button-${document.id}`} aria-label={`Remove ${document.title}`} type="button" variant="ghost" size="icon-sm" onClick={() => onRemove(document)} className="shrink-0 rounded-full text-accent-foreground hover:bg-accent"><Trash2 className="size-4" aria-hidden="true" /></Button>
       </div>
-      <StatusMark status={document.status} testId={`document-${document.id}`} />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <StatusMark status={document.status} testId={`document-${document.id}`} />
+        {document.status === "review" && document.file_id && <a data-testid={`document-view-${document.id}`} href={`/api/applicant/documents/${document.id}/view`} target="_blank" rel="noopener noreferrer" aria-label={`View ${document.title} in a new tab`} className={`${buttonVariants({ variant: "outline", size: "sm" })} rounded-full`}><Eye className="mr-1 size-3.5" aria-hidden="true" />View</a>}
+        {document.status === "review" && !document.file_id && <span data-testid={`document-unavailable-${document.id}`} className="text-xs text-muted-foreground">File unavailable</span>}
+        {document.status === "rejected" && <Button data-testid={`document-resubmit-${document.id}`} size="sm" variant="outline" disabled={!canResubmit} onClick={() => onResubmit(document)} className="rounded-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"><UploadCloud className="mr-1 size-3.5" aria-hidden="true" />Resubmit</Button>}
+      </div>
+      {document.status === "rejected" && <p data-testid={`document-rejection-message-${document.id}`} className="mt-3 border-t border-destructive/20 pt-3 text-xs leading-5 text-destructive">Document not accepted. Please resubmit.{!canResubmit && " Switch to the employment pathway to resubmit this document, or remove it."}</p>}
     </div>
+  );
+}
+
+function RemoveDocumentDialog({ document, onClose, onConfirm, isRemoving }: { document: ApplicantDocument | null; onClose: () => void; onConfirm: () => void; isRemoving: boolean }) {
+  return (
+    <Dialog open={Boolean(document)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent data-testid="remove-document-dialog" className="border-[#d5d1c9] bg-[#fdfcf9] sm:max-w-md">
+        <DialogHeader>
+          <div data-testid="remove-document-icon" className="mb-2 flex size-10 items-center justify-center rounded-xl bg-[#f4e6df] text-[#a66350]"><Trash2 className="size-5" aria-hidden="true" /></div>
+          <DialogTitle data-testid="remove-document-title" className="font-heading text-2xl font-extrabold text-[#2c3b2e]">Remove this document?</DialogTitle>
+          <DialogDescription data-testid="remove-document-description" className="leading-6 text-[#5c6b5e]">{document ? `${document.title} will be removed from your applicant profile${document.file_id ? " and its stored file will be deleted" : ""}.` : "This document will be removed."}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="mt-4">
+          <Button data-testid="remove-document-cancel-button" type="button" variant="ghost" onClick={onClose} className="rounded-full text-[#5c6b5e] hover:bg-[#ebe9e4] hover:text-[#2c3b2e]">Keep document</Button>
+          <Button data-testid="remove-document-confirm-button" type="button" disabled={isRemoving} onClick={onConfirm} className="rounded-full bg-[#a66350] px-6 text-white hover:bg-[#8f503f] disabled:opacity-50">{isRemoving ? "Removing…" : "Remove document"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -429,13 +458,17 @@ export default function Home() {
   const [showIntake, setShowIntake] = useState(false);
   const [showDocumentPanel, setShowDocumentPanel] = useState(false);
   const [showConsultation, setShowConsultation] = useState(false);
-  const applicantQuery = useQuery({ queryKey: ["applicant"], queryFn: () => apiGet<ApplicantProfile>("/applicant"), retry: false });
+  const [documentToRemove, setDocumentToRemove] = useState<ApplicantDocument | null>(null);
+  const [documentToResubmit, setDocumentToResubmit] = useState<ApplicantDocument | null>(null);
+  const applicantQuery = useQuery({ queryKey: ["applicant"], queryFn: () => apiGet<ApplicantProfile>("/applicant"), retry: false, refetchInterval: 10_000 });
   const profile = applicantQuery.data ?? demoProfile;
 
   const intakeMutation = useMutation({
     mutationFn: (payload: ApplicantIntake) => apiPost<ApplicantProfile>("/applicant/intake", payload),
     onSuccess: (updated) => {
       queryClient.setQueryData(["applicant"], updated);
+      queryClient.invalidateQueries({ queryKey: ["applicant"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-booked-profiles"] });
       setShowIntake(false);
       toast.success("Profile scan complete", { description: "Your agent has refreshed the qualification view." });
     },
@@ -443,23 +476,39 @@ export default function Home() {
   });
 
   const documentMutation = useMutation({
-    mutationFn: ({ kind, file }: DocumentUploadInput) => {
+    mutationFn: ({ kind, file, document_id }: DocumentUploadInput) => {
       const formData = new FormData();
       formData.append("kind", kind);
       formData.append("file", file);
-      return apiUpload<ApplicantProfile>("/applicant/documents/upload", formData);
+      return apiUpload<ApplicantProfile>(document_id ? `/applicant/documents/${document_id}/resubmit` : "/applicant/documents/upload", formData);
     },
-    onSuccess: (updated) => {
+    onSuccess: (updated, variables) => {
       queryClient.setQueryData(["applicant"], updated);
+      queryClient.invalidateQueries({ queryKey: ["applicant"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-booked-profiles"] });
       setShowDocumentPanel(false);
-      toast.success("Document uploaded", { description: "The actual file is stored securely and available to the admin team." });
+      setDocumentToResubmit(null);
+      toast.success(variables.document_id ? "Document resubmitted" : "Document uploaded", { description: "Your file is securely stored and awaiting admin review." });
     },
     onError: () => toast.error("Could not add document", { description: "Please try again." }),
+  });
+
+  const removeDocumentMutation = useMutation({
+    mutationFn: (documentId: string) => apiDelete<ApplicantProfile>(`/applicant/documents/${documentId}`),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["applicant"], updated);
+      queryClient.invalidateQueries({ queryKey: ["applicant"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-booked-profiles"] });
+      setDocumentToRemove(null);
+      toast.success("Document removed", { description: "The profile and qualification view have been refreshed." });
+    },
+    onError: () => toast.error("Could not remove document", { description: "Please try again." }),
   });
 
   const PathwayIcon = pathwayIcons[profile.pathway];
   const firstName = useMemo(() => profile.name.split(" ")[0], [profile.name]);
   const completionStroke = Math.max(0, Math.min(100, profile.profile_completion));
+  const hasMissingDocuments = profile.required_document_kinds.some((kind) => !profile.documents.some((document) => document.kind === kind && document.file_id && document.status !== "rejected"));
 
   const goTo = (section: string) => {
     setActiveSection(section);
@@ -537,7 +586,7 @@ export default function Home() {
               <Card data-testid="profile-progress-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-6 shadow-none sm:p-8">
                 <div className="flex items-start justify-between"><div><p data-testid="profile-progress-overline" className="text-xs font-semibold uppercase tracking-[0.2em] text-[#879087]">Profile health</p><p data-testid="profile-progress-label" className="mt-2 text-sm font-semibold text-[#2c3b2e]">Ready for a stronger match</p></div><div data-testid="profile-progress-icon" className="flex size-9 items-center justify-center rounded-full bg-[#f4e6df] text-[#a66350]"><Sparkles className="size-4" aria-hidden="true" /></div></div>
                 <div className="mt-7 flex items-center gap-5">
-                  <div data-testid="profile-progress-ring" className="relative flex size-28 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(#4a6b53 ${completionStroke}%, #e3e1db 0)` }}>
+                  <div data-testid="profile-progress-ring" className="relative flex size-28 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(var(--ring) ${completionStroke}%, var(--secondary) 0)` }}>
                     <div className="flex size-[88px] items-center justify-center rounded-full bg-[#fdfcf9]"><span data-testid="profile-progress-value" className="font-heading text-2xl font-extrabold text-[#2c3b2e]">{completionStroke}%</span></div>
                   </div>
                   <div><p data-testid="profile-progress-body" className="text-sm leading-6 text-[#5c6b5e]">A few verified details will help the agent route you with confidence.</p><button type="button" data-testid="profile-progress-action" onClick={() => setShowIntake(true)} className="mt-3 text-sm font-bold text-[#4a6b53] hover:text-[#3a5541]">Complete profile <ChevronRight className="ml-1 inline size-4" aria-hidden="true" /></button></div>
@@ -547,7 +596,7 @@ export default function Home() {
 
             <section data-testid="journey-overview-section" className="mt-6 grid gap-4 md:grid-cols-3">
               <Card data-testid="pathway-summary-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-5 shadow-none"><div className="flex items-center justify-between"><span data-testid="pathway-summary-label" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#879087]">Your pathway</span><PathwayIcon data-testid="pathway-summary-icon" className="size-4 text-[#4a6b53]" aria-hidden="true" /></div><p data-testid="pathway-summary-value" className="mt-4 font-heading text-lg font-extrabold text-[#2c3b2e]">{formatPathway(profile.pathway)}</p><p data-testid="pathway-summary-city" className="mt-1 flex items-center gap-1 text-xs text-[#879087]"><MapPin className="size-3" aria-hidden="true" /> {profile.city}</p></Card>
-              <Card data-testid="evidence-summary-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-5 shadow-none"><div className="flex items-center justify-between"><span data-testid="evidence-summary-label" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#879087]">Evidence mapped</span><FileText className="size-4 text-[#c27a65]" aria-hidden="true" /></div><p data-testid="evidence-summary-value" className="mt-4 font-heading text-lg font-extrabold text-[#2c3b2e]">{profile.documents.length} documents</p><p data-testid="evidence-summary-status" className="mt-1 text-xs text-[#879087]">{profile.documents.filter((doc) => doc.status === "verified").length} verified by you</p></Card>
+              <Card data-testid="evidence-summary-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-5 shadow-none"><div className="flex items-center justify-between"><span data-testid="evidence-summary-label" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#879087]">Evidence mapped</span><FileText className="size-4 text-[#c27a65]" aria-hidden="true" /></div><p data-testid="evidence-summary-value" className="mt-4 font-heading text-lg font-extrabold text-[#2c3b2e]">{profile.documents.length} documents</p><p data-testid="evidence-summary-status" className="mt-1 text-xs text-[#879087]">{profile.documents.filter((doc) => doc.status === "verified").length} verified by admin</p></Card>
               <Card data-testid="qualification-summary-card" className="border-[#d5d1c9] bg-[#fdfcf9] p-5 shadow-none"><div className="flex items-center justify-between"><span data-testid="qualification-summary-label" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#879087]">Qualification signal</span><ClipboardCheck className="size-4 text-[#4a6b53]" aria-hidden="true" /></div><p data-testid="qualification-summary-value" className="mt-4 font-heading text-lg font-extrabold text-[#2c3b2e]">{profile.qualification_status === "ready" ? "Ready" : "Needs review"}</p><p data-testid="qualification-summary-status" className="mt-1 text-xs text-[#879087]">{profile.missing_items.length} open requirement{profile.missing_items.length === 1 ? "" : "s"}</p></Card>
             </section>
 
@@ -556,20 +605,22 @@ export default function Home() {
             <div className="mt-10 grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
               <Card data-testid="agent-recommendation-card" className="soft-rise soft-rise-delay-1 overflow-hidden border-[#d5d1c9] bg-[#fdfcf9] p-0 shadow-none">
                 <div className="flex items-center justify-between border-b border-[#ebe9e4] px-6 py-5 sm:px-7"><div className="flex items-center gap-3"><div data-testid="agent-recommendation-icon" className="flex size-9 items-center justify-center rounded-xl bg-[#e8efe9] text-[#4a6b53]"><Sparkles className="size-4" aria-hidden="true" /></div><div><p data-testid="agent-recommendation-overline" className="text-xs font-semibold uppercase tracking-[0.17em] text-[#879087]">Agent recommendation</p><p data-testid="agent-recommendation-title" className="mt-1 text-sm font-bold text-[#2c3b2e]">The route I’d take next</p></div></div><Badge data-testid="agent-recommendation-badge" className="bg-[#f4e6df] text-[#8f503f] hover:bg-[#f4e6df]">{profile.qualification_status === "ready" ? "Ready" : "In progress"}</Badge></div>
-                <div data-testid="recommendation-body" className="p-6 sm:p-7"><p data-testid="recommendation-copy" className="max-w-xl font-heading text-2xl font-extrabold leading-tight tracking-tight text-[#2c3b2e]">{profile.recommended_next_step}</p><p data-testid="recommendation-detail" className="mt-4 max-w-xl text-sm leading-6 text-[#5c6b5e]">The agent compares your stated pathway with the evidence you have shared, then flags only the gaps that change your recommendation.</p><div className="mt-7 flex flex-wrap gap-3"><Button data-testid="recommendation-primary-button" onClick={() => { if (profile.missing_items.length === 0) setShowConsultation(true); else if (profile.missing_items.some((item) => item.toLowerCase().includes("cv"))) setShowDocumentPanel(true); else setShowIntake(true); }} className="rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541]">{profile.missing_items.length > 0 ? "Close the next gap" : "Book consultation"}<ArrowUpRight className="ml-2 size-4" aria-hidden="true" /></Button><button type="button" data-testid="recommendation-secondary-button" onClick={() => goTo("Qualification")} className="rounded-full px-4 text-sm font-bold text-[#4a6b53] hover:bg-[#edf4ee]">See the reasoning <ChevronRight className="ml-1 inline size-4" aria-hidden="true" /></button></div></div>
+                <div data-testid="recommendation-body" className="p-6 sm:p-7"><p data-testid="recommendation-copy" className="max-w-xl font-heading text-2xl font-extrabold leading-tight tracking-tight text-[#2c3b2e]">{profile.recommended_next_step}</p><p data-testid="recommendation-detail" className="mt-4 max-w-xl text-sm leading-6 text-[#5c6b5e]">The agent compares your stated pathway with the evidence you have shared, then flags only the gaps that change your recommendation.</p><div className="mt-7 flex flex-wrap gap-3"><Button data-testid="recommendation-primary-button" onClick={() => { if (profile.missing_items.length === 0) setShowConsultation(true); else if (hasMissingDocuments) setShowDocumentPanel(true); else setShowIntake(true); }} className="rounded-full bg-[#4a6b53] text-white hover:-translate-y-0.5 hover:bg-[#3a5541]">{profile.missing_items.length > 0 ? "Close the next gap" : "Book consultation"}<ArrowUpRight className="ml-2 size-4" aria-hidden="true" /></Button><button type="button" data-testid="recommendation-secondary-button" onClick={() => goTo("Qualification")} className="rounded-full px-4 text-sm font-bold text-[#4a6b53] hover:bg-[#edf4ee]">See the reasoning <ChevronRight className="ml-1 inline size-4" aria-hidden="true" /></button></div></div>
               </Card>
 
               <Card id="qualification-section" data-testid="qualification-card" className="soft-rise soft-rise-delay-2 border-[#d5d1c9] bg-[#2c3b2e] p-6 text-white shadow-none sm:p-7">
                 <div className="flex items-center justify-between"><p data-testid="qualification-card-overline" className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c9d7ca]">Qualification view</p><span data-testid="qualification-card-icon" className="flex size-8 items-center justify-center rounded-full bg-white/10"><ClipboardCheck className="size-4 text-[#d4a373]" aria-hidden="true" /></span></div>
                 <div className="mt-8"><p data-testid="qualification-card-label" className="text-sm font-semibold text-white/65">Current signal</p><p data-testid="qualification-card-value" className="mt-2 font-heading text-3xl font-extrabold tracking-tight">{profile.qualification_label}</p><div data-testid="qualification-progress-track" className="mt-7 h-2 overflow-hidden rounded-full bg-white/15"><div data-testid="qualification-progress-fill" className="h-full rounded-full bg-[#d4a373]" style={{ width: `${completionStroke}%` }} /></div><div className="mt-3 flex justify-between text-xs"><span data-testid="qualification-progress-caption" className="text-white/65">Profile completeness</span><span data-testid="qualification-progress-number" className="font-mono text-[#f8e7d9]">{completionStroke}%</span></div></div>
-                <div className="mt-8 border-t border-white/10 pt-6"><p data-testid="qualification-missing-title" className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Open requirements</p><div data-testid="qualification-missing-list" className="mt-4 space-y-3">{profile.missing_items.slice(0, 3).map((item) => <div data-testid={`missing-item-${item.slice(0, 8).replaceAll(" ", "-").toLowerCase()}`} key={item} className="flex items-start gap-2 text-sm text-white/80"><AlertCircle className="mt-0.5 size-4 shrink-0 text-[#d4a373]" aria-hidden="true" /><span data-testid={`missing-item-label-${item.slice(0, 8).replaceAll(" ", "-").toLowerCase()}`}>{item}</span></div>)}{profile.missing_items.length === 0 && <div data-testid="qualification-all-clear" className="flex items-center gap-2 text-sm text-white/80"><Check className="size-4 text-[#d4a373]" /> All key requirements are mapped.</div>}</div></div>
+                <div className="mt-8 border-t border-white/10 pt-6"><p data-testid="qualification-missing-title" className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Open requirements</p><div data-testid="qualification-missing-list" className="mt-4 space-y-3">{profile.missing_items.map((item) => <div data-testid={`missing-item-${item.slice(0, 8).replaceAll(" ", "-").toLowerCase()}`} key={item} className="flex items-start gap-2 text-sm text-white/80"><AlertCircle className="mt-0.5 size-4 shrink-0 text-[#d4a373]" aria-hidden="true" /><span data-testid={`missing-item-label-${item.slice(0, 8).replaceAll(" ", "-").toLowerCase()}`}>{item}</span></div>)}{profile.missing_items.length === 0 && <div data-testid="qualification-all-clear" className="flex items-center gap-2 text-sm text-white/80"><Check className="size-4 text-[#d4a373]" /> All key requirements are mapped.</div>}</div></div>
               </Card>
             </div>
 
             <div className="mt-6 grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
               <Card id="documents-section" data-testid="documents-card" className="soft-rise soft-rise-delay-2 border-[#d5d1c9] bg-[#fdfcf9] p-6 shadow-none sm:p-7">
                 <div className="flex items-start justify-between gap-4"><div><p data-testid="documents-overline" className="text-xs font-semibold uppercase tracking-[0.18em] text-[#879087]">Evidence locker</p><h2 data-testid="documents-title" className="mt-2 font-heading text-2xl font-extrabold tracking-tight text-[#2c3b2e]">Documents that tell your story</h2><p data-testid="documents-description" className="mt-2 text-sm leading-6 text-[#5c6b5e]">Everything stays clearly marked as applicant-provided or agent-generated.</p></div><Button data-testid="add-document-button" variant="outline" onClick={() => setShowDocumentPanel(true)} className="shrink-0 rounded-full border-[#b9c5ba] text-[#4a6b53] hover:bg-[#edf4ee] hover:text-[#3a5541]"><Plus className="mr-1.5 size-4" aria-hidden="true" /> <span className="hidden sm:inline">Add document</span><span className="sm:hidden">Add</span></Button></div>
-                <div data-testid="documents-list" className="mt-6 space-y-2">{profile.documents.map((document) => <DocumentRow key={document.id} document={document} />)}</div>
+                <div className="mt-5"><RequiredDocuments profile={profile} testId="applicant-required-documents" /></div>
+                <p data-testid="document-preview-policy" className="mt-4 text-xs leading-5 text-muted-foreground">You can view files awaiting review. Accepted files are marked verified; rejected files need a replacement.</p>
+                <div data-testid="documents-list" className="mt-4 space-y-2">{profile.documents.map((document) => <DocumentRow key={document.id} document={document} onRemove={setDocumentToRemove} canResubmit={profile.required_document_kinds.includes(document.kind)} onResubmit={(rejected) => { setDocumentToResubmit(rejected); setShowDocumentPanel(true); }} />)}</div>
                 <button type="button" data-testid="documents-view-all-button" onClick={() => setShowDocumentPanel(true)} className="mt-5 text-sm font-bold text-[#4a6b53] hover:text-[#3a5541]">Add another document <ChevronRight className="ml-1 inline size-4" aria-hidden="true" /></button>
               </Card>
 
@@ -584,8 +635,9 @@ export default function Home() {
         </main>
       </div>
       {showIntake && <IntakePanel profile={profile} onClose={() => setShowIntake(false)} onSubmit={(payload) => intakeMutation.mutate(payload)} isSubmitting={intakeMutation.isPending} />}
-      {showDocumentPanel && <DocumentPanel onClose={() => setShowDocumentPanel(false)} onSubmit={(payload) => documentMutation.mutate(payload)} isSubmitting={documentMutation.isPending} />}
+      {showDocumentPanel && <DocumentPanel profile={profile} resubmission={documentToResubmit} onClose={() => { setShowDocumentPanel(false); setDocumentToResubmit(null); }} onSubmit={(payload) => documentMutation.mutate(payload)} isSubmitting={documentMutation.isPending} />}
       <ConsultationDialog open={showConsultation} onOpenChange={setShowConsultation} />
+      <RemoveDocumentDialog document={documentToRemove} onClose={() => setDocumentToRemove(null)} onConfirm={() => { if (documentToRemove) removeDocumentMutation.mutate(documentToRemove.id); }} isRemoving={removeDocumentMutation.isPending} />
     </div>
   );
 }
